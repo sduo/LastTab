@@ -1,0 +1,116 @@
+﻿@page "/"
+@inject IJSRuntime JSRuntime
+@inject ProtectedLocalStorage LocalStorage
+@inject BookmarkService BookmarkService
+
+<PageTitle>Last Tab</PageTitle>
+<InputGroup Compact>        
+    
+    <Input AllowClear @bind-Value="@filter_text">
+        <AddOnBefore>
+            <Icon Type="filter" Theme="outline" />
+            <Text>@($"{filtered.Length}/{bookmarks.Count}")</Text>
+        </AddOnBefore>
+    </Input>
+        <RangePicker Style="width: 50%;" @bind-Value="@filter_range">
+        <SuffixIcon />
+    </RangePicker>
+        <Button OnClick="async (e)=>{ await Reload();}">
+        <Icon Type="reload" Theme="outline" />
+    </Button>
+    <Button Type="@ButtonType.Primary" OnClick="(e)=>{ ApplyFilter();}">
+        <Icon Type="search" Theme="outline" />
+    </Button>
+</InputGroup>
+    <Table TItem="Bookmark" DataSource="@filtered" Total="@filtered.Length" Bordered=@false Size=@TableSize.Small HidePagination=@true EnableVirtualization Class="bookmarks">
+    <ActionColumn>
+        <ButtonGroup>
+            <Tooltip Placement="Placement.TopLeft" Title="@context.Url">
+                <Button Type="@ButtonType.Link" Size="@ButtonSize.Small" OnClick="async (e)=>{await Open(context,true);}">@context.Title</Button>
+            </Tooltip>
+            <Tooltip Title="@DateTimeOffset.FromUnixTimeMilliseconds(context.Timestamp).ToString("yyyy-MM-dd HH:mm:ss")">
+                <Button Type="@ButtonType.Link" Size="@ButtonSize.Small" OnClick="async (e)=>{await Delete(context);}" Icon="@IconType.Outline.ClockCircle" />
+            </Tooltip>
+            <Tooltip Title="Open & Keep">
+                <Button Type="@ButtonType.Link" Size="@ButtonSize.Small" OnClick="async (e)=>{await Open(context,false);}" Icon="@IconType.Outline.Block" />
+            </Tooltip>
+            <Tooltip Title="Copy">
+                <Button Type="@ButtonType.Link" Size="@ButtonSize.Small" OnClick="async (e)=>{await Copy(context);}" Icon="@IconType.Outline.Copy" />
+            </Tooltip>
+            <Tooltip Title="Delete">
+                <Button Type="@ButtonType.Link" Size="@ButtonSize.Small" OnClick="async (e)=>{await Delete(context);}" Icon="@IconType.Outline.Delete" />
+            </Tooltip>
+        </ButtonGroup>
+    </ActionColumn>
+</Table>
+<BackTop></BackTop>
+
+    @code{
+    private string filter_text = string.Empty;
+    private DateTime?[] filter_range = new DateTime?[] { null, null };
+
+    private Bookmark[] filtered = Array.Empty<Bookmark>();
+    private List<Bookmark> bookmarks = new List<Bookmark>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        bookmarks.AddRange(await BookmarkService.GetBookmarkListAsync());
+        ApplyFilter();
+    }
+
+    private async Task Reload()
+    {
+        filter_text = string.Empty;
+        filter_range = new DateTime?[] { null, null };
+        bookmarks = (await BookmarkService.GetBookmarkListAsync()).ToList();
+        ApplyFilter();
+    }
+
+    private async Task Open(Bookmark bookmark, bool delete)
+    {
+        if (delete) {  await Delete(bookmark); }
+        await JSRuntime.InvokeVoidAsync("open", bookmark.Url);
+    }
+
+    private async Task Copy(Bookmark bookmark)
+    {
+        await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", bookmark.Url);
+    }
+
+    private async Task Delete(Bookmark bookmark)
+    {
+        var rows = await BookmarkService.RemoveBookmarkAsync(bookmark.Id);
+        if (rows > 0)
+        {
+            bookmarks.Remove(bookmark);
+            ApplyFilter();
+        }        
+    }
+
+    private void ApplyFilter()
+    {
+        var filters = new List<Func<Bookmark, bool>>();
+
+        if (!string.IsNullOrWhiteSpace(filter_text))
+        {
+            filters.Add(x => x.Title.Contains(filter_text, StringComparison.OrdinalIgnoreCase) || x.Url.Contains(filter_text, StringComparison.OrdinalIgnoreCase));
+        }
+
+        var filter_range_first = filter_range.FirstOrDefault();
+        var filter_range_last = filter_range.LastOrDefault();
+
+        if (filter_range_first.HasValue)
+        {
+            var filter_range_first_timestamp = new DateTimeOffset(filter_range_first.Value).ToUnixTimeMilliseconds();
+            filters.Add(x => x.Timestamp >= filter_range_first_timestamp);
+        }
+
+        if (filter_range_last.HasValue)
+        {
+            var filter_range_last_timestamp = new DateTimeOffset(filter_range_last.Value).ToUnixTimeMilliseconds();
+            filters.Add(x => x.Timestamp <= filter_range_last_timestamp);
+        }
+
+        filtered = bookmarks.Where(x=>filters.All(f=>f.Invoke(x))).OrderByDescending(x=>x.Timestamp).ToArray();
+    }
+}

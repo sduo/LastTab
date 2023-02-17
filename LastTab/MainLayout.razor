@@ -1,0 +1,153 @@
+﻿@using LastTab.Providers;
+@using Microsoft.AspNetCore.Components.Forms;
+
+@inherits LayoutComponentBase
+@inject NavigationManager NavigationManager
+@inject ProtectedLocalStorage LocalStorage
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject ModalService ModalService
+
+<Header>
+    <PageHeader Ghost="true">
+        <PageHeaderTitle>
+            <a href="/">
+                <Title Level="1">Last Tab</Title>
+            </a>
+        </PageHeaderTitle>
+        <PageHeaderSubtitle></PageHeaderSubtitle>
+        <PageHeaderExtra>
+            <AuthorizeView>
+                <Authorized>
+                    <ButtonGroup Class="zone">
+                        <Button Type="@ButtonType.Link" Size="@ButtonSize.Small" Ghost Icon="@IconType.Outline.Tool" OnClick="async (e)=>{ await OpenToolsModal();}" />
+                        <Button Type="@ButtonType.Link" Size="@ButtonSize.Small" Ghost OnClick="async(e)=>{await Logout();}" Icon="@IconType.Outline.Logout">Logout</Button>
+                    </ButtonGroup>
+                </Authorized>
+            </AuthorizeView>
+        </PageHeaderExtra>
+    </PageHeader>
+</Header>
+<Content>
+    @if (!string.IsNullOrWhiteSpace(alert))
+    {
+        <Alert Closable Type="@alert" Message="@message" Description="@description" OnClose="(e)=>{CloseAlert();}" />
+    }
+    <AuthorizeView>
+        <Authorized>
+            @Body
+        </Authorized>
+        <NotAuthorized Context="auth">
+            <Form Layout="@FormLayout.Vertical" Model="@token" OnFinish="async (e)=>{await Login();}" OnFinishFailed="OnFinishFailed">
+                <FormItem Label="User">
+                    <Input @bind-Value="@context.User" />
+                </FormItem>
+                <FormItem Label="AppCode">
+                    <InputPassword @bind-Value="@context.AppCode" />
+                </FormItem>
+                <FormItem>
+                    <Button Type="@ButtonType.Primary" HtmlType="submit">Submit</Button>
+                </FormItem>
+            </Form>
+        </NotAuthorized>
+        <Authorizing>
+            <Spin Class="spin" Tip="Authorizing" size="large" />
+        </Authorizing>
+    </AuthorizeView>
+</Content>
+<Footer>
+    <Space>
+        <SpaceItem>
+            <a href="https://antblazor.com/" target="_blank">
+                <Tag Icon="ant-design" Color="#55acee">Ant Design Blazor</Tag>
+            </a>
+        </SpaceItem>
+        <SpaceItem>
+            <a href="https://github.com/sduo/LastTab/" target="_blank">
+                <Tag Icon="github" Color="#55acee">Last Tab</Tag>
+            </a>
+        </SpaceItem>
+    </Space>
+</Footer>
+
+@code{
+    private AppCodeToken token = new AppCodeToken();
+    private string alert = string.Empty;
+    private string message = string.Empty;
+    private string description = string.Empty;
+
+    private async Task Login()
+    {
+        await LocalStorage.SetAsync("Token", token);
+        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        if (!state.User.Identity.IsAuthenticated)
+        {
+            alert = AlertType.Warning;
+            message = "Login Failed";
+        }
+    }
+
+    private async Task Logout()
+    {
+        await LocalStorage.DeleteAsync("Token");
+        var state = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+    }
+
+    private async Task OpenToolsModal()
+    {
+        await ModalService.CreateModalAsync(new ModalOptions()
+        {
+                Title = null,
+                Footer = null,
+                Centered = true,
+                DestroyOnClose = true,
+                Content = @<Layout Class="modal tools">
+                    <Divider>Javascript</Divider>
+                    <Space>
+                        <SpaceItem>
+                            <Tooltip Title="Drag it to your favorites">
+                                <a href="javascript:function p(a,w,h){var b=window.screenLeft!=undefined?window.screenLeft:screen.left;var c=window.screenTop!=undefined?window.screenTop:screen.top;width=window.innerWidth ? window.innerWidth:document.documentElement.clientWidth?document.documentElement.clientWidth:screen.width;height=window.innerHeight?window.innerHeight:document.documentElement.clientHeight?document.documentElement.clientHeight:screen.height;var d=((width/2)-(w/2))+b;var e=((height/2)-(h/2))+c;var f = window.open(a, new Date().getTime(), 'width=' + w + ', height=' + h + ', top=' + e + ', left=' + d + 'location=yes,resizable=yes,status=no,scrollbars=no,personalbar=no,toolbar=no,menubar=no');if(window.focus){f.focus()}}p('@NavigationManager.ToAbsoluteUri("/New")?Title='+encodeURIComponent(document.title ?? location.href)+'&Url='+encodeURIComponent(location.href),640,480);">
+                                    <Button Icon="@IconType.Outline.Snippets">Last Tab</Button>
+                                </a>
+                            </Tooltip>
+                        </SpaceItem>
+                    </Space>
+                    <Divider>Addons</Divider>
+                    <Space>
+                        <SpaceItem>
+                            <Tooltip Title="Coming Soon ...">
+                                <a href="javascript:;">
+                                    <Button Icon="@IconType.Outline.Coffee">Microsoft Edge</Button>
+                                </a>
+                            </Tooltip>
+                        </SpaceItem>
+                        <SpaceItem>
+                            <Tooltip Title="Coming Soon ...">
+                                <a href="javascript:;">
+                        <Button Icon="@IconType.Outline.Coffee">Google Chrome</Button>
+                                </a>
+                            </Tooltip>
+                        </SpaceItem>
+                        <SpaceItem>
+                            <Tooltip Title="Coming Soon ...">
+                                <a href="javascript:;">
+                        <Button Icon="@IconType.Outline.Coffee">Mozilla Firefox</Button>
+                                </a>
+                            </Tooltip>
+                        </SpaceItem>
+                    </Space>                    
+                </Layout>
+        });
+    }
+
+    private void CloseAlert()
+    {
+        alert = string.Empty;
+        message = string.Empty;
+        description = string.Empty;
+    }
+
+    private void OnFinishFailed(EditContext context)
+    {
+        
+    }
+}

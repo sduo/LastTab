@@ -1,0 +1,81 @@
+﻿@page "/New"
+@inject IJSRuntime JSRuntime
+@inject NavigationManager NavigationManager
+@inject ProtectedLocalStorage LocalStorage
+@inject BookmarkService BookmarkService
+
+
+<PageTitle>Last Tab</PageTitle>
+@if (string.IsNullOrWhiteSpace(status))
+{
+    <Spin Class="spin" Size="large" Tip="Saving, Please wait." />
+}
+else
+{
+    <Result Status="@status" TitleTemplate=@message SubTitleTemplate=@description >
+        <Extra>
+            @if (string.Equals("warning", status))
+            {
+                <Button Type="@ButtonType.Primary" OnClick="async (e)=>{ await SaveAsync();}">Retry</Button>
+                <Button Type="@ButtonType.Default" OnClick="async (e)=>{ await CloseAsync();}">Close</Button>
+            }
+            else
+            {
+                <Button Type="@ButtonType.Primary" OnClick="async (e)=>{ await CloseAsync();}">Close</Button>
+            }
+        </Extra>
+    </Result>
+}
+
+@code{
+    private string status = string.Empty;
+    private RenderFragment message = @<Layout></Layout>;
+    private RenderFragment description = @<Layout></Layout>;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await SaveAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool first)
+    {
+        await base.OnAfterRenderAsync(first);
+        if (string.Equals("success",status))
+        {            
+            await CloseAsync(5000);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        status = string.Empty;
+        var uri = new Uri(NavigationManager.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+
+        if (!query.TryGetValue("Url", out var url) || string.IsNullOrWhiteSpace(url))
+        {
+            status = "error"; 
+            message = @<Layout><Paragraph>Error</Paragraph></Layout>;
+            description = @<Layout><Paragraph>Illegal Query String: Url</Paragraph></Layout>; 
+            return;
+        }
+        var no_title = !query.TryGetValue("Title", out var title) || string.IsNullOrWhiteSpace(title);
+        if (no_title) { title = url; }
+        var bookmark = await BookmarkService.InsertBookmarkAsync(title, url);
+        if (bookmark == null) 
+        { 
+            status = "warning"; 
+            message = @<Layout><Paragraph>Warning</Paragraph></Layout>;
+            description = @<Layout><Paragraph>Not Available: BookmarkService.InsertBookmarkAsync</Paragraph></Layout>; 
+            return;
+        }
+        status = "success";
+        message = @<Layout><Paragraph>Successfully</Paragraph></Layout>;
+        description = no_title ? @<Layout><Text>@url</Text></Layout> : @<Layout><Text>@title</Text><Text>@url</Text></Layout>;
+    }
+
+    private async Task CloseAsync(int timeout=0)
+    {       
+        await JSRuntime.InvokeVoidAsync("autoClose", timeout);
+    }    
+}
